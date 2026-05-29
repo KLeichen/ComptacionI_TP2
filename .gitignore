@@ -1,0 +1,10 @@
+# Python
+__pycache__/
+*.pyc
+
+# Local virtual environment (recreate with: pip install -r requirements.txt)
+venv/
+
+# Runtime logs
+app.log
+*.log

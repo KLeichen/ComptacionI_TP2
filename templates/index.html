@@ -1,0 +1,180 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>NEXUS · System Resource Monitor</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@500;700;900&family=Rajdhani:wght@400;500;600;700&family=Share+Tech+Mono&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}" />
+</head>
+<body>
+  <!-- animated background layers -->
+  <div class="bg-grid"></div>
+  <div class="bg-glow"></div>
+  <!-- red alarm lights, shown only in critical mode -->
+  <div class="alarm-lights">
+    <span class="alarm tl"></span><span class="alarm tr"></span>
+    <span class="alarm bl"></span><span class="alarm br"></span>
+  </div>
+
+  <!-- CRITICAL danger sign (center of screen) -->
+  <div id="danger" class="danger hidden">
+    <div class="danger-sign">
+      <svg viewBox="0 0 100 90" class="danger-tri" aria-hidden="true">
+        <path d="M50 4 L96 86 L4 86 Z" />
+        <rect x="46" y="32" width="8" height="30" rx="3" class="excl" />
+        <circle cx="50" cy="73" r="5" class="excl" />
+      </svg>
+      <div class="danger-text">CRITICAL</div>
+      <div class="danger-sub" id="danger-sub">RESOURCE THRESHOLD EXCEEDED</div>
+    </div>
+  </div>
+
+  <!-- Option C: stale / offline overlay -->
+  <div id="offline" class="offline hidden">
+    <div class="offline-box">
+      <div class="offline-title">// SIGNAL LOST</div>
+      <div class="offline-msg">[CRITICAL] Agent Offline: Data is Stale.</div>
+      <div class="offline-sub">status:current expired in Redis — awaiting monitoring agent…</div>
+    </div>
+  </div>
+
+  <div class="app">
+    <!-- HEADER -->
+    <header class="topbar">
+      <div class="brand">
+        <span class="brand-mark">◢◤</span>
+        <span class="brand-name">NEXUS</span>
+        <span class="brand-sub">SYSTEM RESOURCE MONITOR</span>
+      </div>
+      <div class="top-stats">
+        <div class="pill"><span class="pill-k">SAMPLE</span><span class="pill-v" id="t-counter">0</span></div>
+        <div class="pill"><span class="pill-k">CLOCK</span><span class="pill-v" id="t-time">--:--:--</span></div>
+        <div class="status" id="status">
+          <span class="status-dot" id="dot"></span>
+          <span id="status-text">CONNECTING</span>
+        </div>
+        <button class="gear" id="open-cfg" title="Adjust thresholds">⚙ THRESHOLDS</button>
+      </div>
+    </header>
+
+    <!-- MAIN GRID: everything visible at once -->
+    <main class="grid">
+      <!-- three radial gauges -->
+      <section class="card gauge-card" data-res="cpu">
+        <div class="card-title">CPU</div>
+        <div class="ring">
+          <svg viewBox="0 0 180 180">
+            <circle class="ring-track" cx="90" cy="90" r="76" />
+            <circle class="ring-fill" id="ring-cpu" cx="90" cy="90" r="76" />
+          </svg>
+          <div class="ring-center">
+            <span class="ring-val" id="num-cpu">--</span><span class="ring-pct">%</span>
+          </div>
+        </div>
+        <div class="card-foot">limit <b id="lim-cpu">--</b>%</div>
+      </section>
+
+      <section class="card gauge-card" data-res="memory">
+        <div class="card-title">MEMORY</div>
+        <div class="ring">
+          <svg viewBox="0 0 180 180">
+            <circle class="ring-track" cx="90" cy="90" r="76" />
+            <circle class="ring-fill" id="ring-memory" cx="90" cy="90" r="76" />
+          </svg>
+          <div class="ring-center">
+            <span class="ring-val" id="num-memory">--</span><span class="ring-pct">%</span>
+          </div>
+        </div>
+        <div class="card-foot">limit <b id="lim-memory">--</b>%</div>
+      </section>
+
+      <section class="card gauge-card" data-res="disk">
+        <div class="card-title">DISK</div>
+        <div class="ring">
+          <svg viewBox="0 0 180 180">
+            <circle class="ring-track" cx="90" cy="90" r="76" />
+            <circle class="ring-fill" id="ring-disk" cx="90" cy="90" r="76" />
+          </svg>
+          <div class="ring-center">
+            <span class="ring-val" id="num-disk">--</span><span class="ring-pct">%</span>
+          </div>
+        </div>
+        <div class="card-foot">limit <b id="lim-disk">--</b>%</div>
+      </section>
+
+      <!-- system telemetry -->
+      <section class="card stat-card">
+        <div class="card-title">TELEMETRY</div>
+        <div class="stat-grid">
+          <div><span class="s-k">CPU 1-MIN AVG</span><span class="s-v" id="s-avg">--%</span></div>
+          <div><span class="s-k">PEAK</span><span class="s-v" id="s-max">--%</span></div>
+          <div><span class="s-k">FLOOR</span><span class="s-v" id="s-min">--%</span></div>
+          <div><span class="s-k">WINDOW</span><span class="s-v" id="s-window">0</span></div>
+          <div><span class="s-k">SAMPLES</span><span class="s-v" id="s-counter">0</span></div>
+          <div><span class="s-k">UPDATED</span><span class="s-v" id="s-time">--:--:--</span></div>
+        </div>
+      </section>
+
+      <!-- CPU history chart (Option A) -->
+      <section class="card chart-card">
+        <div class="card-title">CPU HISTORY · 60s MOVING AVERAGE</div>
+        <svg class="chart" id="chart" viewBox="0 0 600 180" preserveAspectRatio="none">
+          <defs>
+            <linearGradient id="area-grad" x1="0" y1="0" x2="0" y2="1">
+              <stop offset="0%" stop-color="var(--accent)" stop-opacity="0.55" />
+              <stop offset="100%" stop-color="var(--accent)" stop-opacity="0" />
+            </linearGradient>
+          </defs>
+          <line class="thr-line" id="thr-line" x1="0" x2="600" y1="40" y2="40" />
+          <polygon class="chart-area" id="chart-area" points="" />
+          <polyline class="chart-line" id="chart-line" points="" />
+          <line class="avg-line" id="avg-line" x1="0" x2="600" y1="120" y2="120" />
+        </svg>
+        <div class="chart-legend">
+          <span><i class="dash accent"></i> live</span>
+          <span><i class="dash avg"></i> avg <b id="c-avg">--%</b></span>
+          <span><i class="dash thr"></i> threshold <b id="c-thr">--%</b></span>
+        </div>
+      </section>
+
+      <!-- alerts feed -->
+      <section class="card alert-card">
+        <div class="card-title">ALERT FEED · PUB/SUB</div>
+        <div class="feed" id="feed">
+          <div class="feed-empty">No alerts. Lower a threshold to trigger one.</div>
+        </div>
+      </section>
+    </main>
+  </div>
+
+  <!-- THRESHOLD DRAWER (the only other "screen", just for changing values) -->
+  <div class="drawer-scrim hidden" id="scrim"></div>
+  <aside class="drawer hidden" id="drawer">
+    <div class="drawer-head">
+      <span>THRESHOLD CONTROL</span>
+      <button class="drawer-close" id="close-cfg">✕</button>
+    </div>
+    <p class="drawer-hint">Live config (Option B). The agent applies changes on its next sample — no restart.</p>
+
+    <div class="slider-block" data-res="cpu">
+      <div class="slider-top"><span>CPU</span><span class="slider-num" id="out-cpu">80%</span></div>
+      <input type="range" min="0" max="100" step="1" id="rng-cpu" />
+    </div>
+    <div class="slider-block" data-res="memory">
+      <div class="slider-top"><span>MEMORY</span><span class="slider-num" id="out-memory">85%</span></div>
+      <input type="range" min="0" max="100" step="1" id="rng-memory" />
+    </div>
+    <div class="slider-block" data-res="disk">
+      <div class="slider-top"><span>DISK</span><span class="slider-num" id="out-disk">90%</span></div>
+      <input type="range" min="0" max="100" step="1" id="rng-disk" />
+    </div>
+
+    <div class="drawer-status" id="cfg-status"></div>
+  </aside>
+
+  <script src="{{ url_for('static', filename='ui.js') }}"></script>
+</body>
+</html>
