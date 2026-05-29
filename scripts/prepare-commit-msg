@@ -1,0 +1,11 @@
+#!/bin/bash
+# Remove Cursor co-author / attribution lines from the commit message.
+COMMIT_MSG_FILE=$1
+if [ -z "$COMMIT_MSG_FILE" ] || [ ! -f "$COMMIT_MSG_FILE" ]; then
+  exit 0
+fi
+if sed --version 2>/dev/null | grep -q GNU; then
+  sed -i '/cursoragent@cursor\.com/d' "$COMMIT_MSG_FILE"
+else
+  sed -i '' '/cursoragent@cursor\.com/d' "$COMMIT_MSG_FILE"
+fi
